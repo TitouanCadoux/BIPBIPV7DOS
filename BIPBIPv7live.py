@@ -1,4 +1,5 @@
 import sys
+sys.path.append("./live_tools")
 import os
 import json
 import time
@@ -27,6 +28,9 @@ TIMEFRAME = "1m"
 # Chargement des keys
 with open("./BIPBIPV7DOS/secret.json") as f:
     secret = json.load(f)
+    
+account_to_select = "bitget_exemple"
+production = True    
 
 bitget = PerpBitget(
     apiKey=secret["bitget_exemple"]["apiKey"],
