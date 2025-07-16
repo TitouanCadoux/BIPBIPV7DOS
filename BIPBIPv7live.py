@@ -24,7 +24,7 @@ PAIR = "SOL/USDT:USDT"
 TIMEFRAME = "1m"
 
 # Chargement des keys
-with open("./BOT/secret.json") as f:
+with open("./BIPBIPV7DOS/secret.json") as f:
     secret = json.load(f)
 bitget = PerpBitget(
     apiKey=secret["bitget_exemple"]["apiKey"],
