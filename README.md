@@ -1,5 +1,5 @@
 # BOT
 
-git clone https://github.com/TitouanCadoux/live_tools.git
+git clone https://github.com/TitouanCadoux/BOT.git
 
-bash ./live_tools/install.sh
+bash ./BOT/install.sh
