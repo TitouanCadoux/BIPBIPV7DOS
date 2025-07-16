@@ -1,5 +1,5 @@
-import sys
-sys.path.append("./live_tools")
+mport sys
+sys.path.append("./BIPBIPV7DOS")
 import os
 import json
 import time
@@ -28,9 +28,9 @@ TIMEFRAME = "1m"
 # Chargement des keys
 with open("./BIPBIPV7DOS/secret.json") as f:
     secret = json.load(f)
-    
+
 account_to_select = "bitget_exemple"
-production = True    
+production = True
 
 bitget = PerpBitget(
     apiKey=secret["bitget_exemple"]["apiKey"],
@@ -44,9 +44,14 @@ print(f"\n--- Start {datetime.now():%d/%m/%Y %H:%M:%S} | {PAIR} ×{LEVERAGE} ---
 df = bitget.get_more_last_historical_async(PAIR, TIMEFRAME, 1000)
 df = df[["open", "high", "low", "close", "volume"]]
 
+# 🔔 Affichage du solde immédiatement
+usd_balance = float(bitget.get_usdt_equity())
+print(f"USDT balance: {usd_balance:.2f}")
+
 if len(df) < max(EMA_SLOW, ATR_PERIOD) + 1:
     print(f"⛔ Pas assez de données pour calculer les indicateurs (min requis: {max(EMA_SLOW, ATR_PERIOD) + 1})")
     exit()
+
 
 df["EMA_FAST"] = ta.trend.ema_indicator(df["close"], EMA_FAST)
 df["EMA_SLOW"] = ta.trend.ema_indicator(df["close"], EMA_SLOW)
@@ -167,4 +172,5 @@ else:
 
 # === Fin
 print(f"--- End {datetime.now():%d/%m/%Y %H:%M:%S} ---")
+
 
