@@ -176,7 +176,8 @@ class PerpBitget():
     @authentication_required
     def get_open_position(self, symbol=None):
         try:
-            positions = self._session.fetch_positions(params={"productType": "umcbl"})
+            symbols = [symbol] if symbol else list(self._session.markets.keys())
+            positions = self._session.fetch_positions(symbols=symbols, params={"productType": "umcbl"})
             return [
                 p for p in positions
                 if float(p.get('contracts', 0)) > 0 and (symbol is None or p['symbol'] == symbol)
@@ -209,3 +210,4 @@ class PerpBitget():
             )
         except BaseException as err:
             raise Exception("An error occurred in cancel_order_ids", err)
+
