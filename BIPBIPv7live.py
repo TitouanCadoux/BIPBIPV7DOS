@@ -1,4 +1,3 @@
-mport sys
 sys.path.append("./BIPBIPV7DOS")
 import os
 import json
@@ -8,8 +7,9 @@ from datetime import datetime
 import ccxt
 import ta
 import pandas as pd
-from utilities.perp_bitget import PerpBitget
-from utilities.custom_indicators import get_n_columns
+from perp_bitget import PerpBitget
+from custom_indicators import get_n_columns
+
 
 # === PARAMÈTRES ===
 EMA_FAST = 200
