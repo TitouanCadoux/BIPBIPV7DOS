@@ -1,3 +1,4 @@
+import sys
 sys.path.append("./BIPBIPV7DOS")
 import os
 import json
