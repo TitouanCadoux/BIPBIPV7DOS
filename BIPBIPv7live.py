@@ -8,8 +8,9 @@ from datetime import datetime
 import ccxt
 import ta
 import pandas as pd
-from perp_bitget import PerpBitget
-from custom_indicators import get_n_columns
+from utilities.perp_bitget import PerpBitget
+from utilities.utilities.custom_indicators import get_n_columns
+
 
 
 # === PARAMÈTRES ===
