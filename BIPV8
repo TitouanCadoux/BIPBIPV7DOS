@@ -1,0 +1,155 @@
+# === IMPORTS & CONFIG ===
+import sys
+sys.path.append("./BIPBIPV7DOS")
+import os
+import json
+from datetime import datetime
+import ccxt
+import ta
+import pandas as pd
+from utilities.perp_bitget import PerpBitget
+from utilities.utilities.custom_indicators import get_n_columns
+
+# === PARAMÈTRES ===
+EMA_FAST = 100
+EMA_SLOW = 150
+RSI_PERIOD = 14
+RSI_UPPER_THRESHOLD = 50
+RSI_LOWER_THRESHOLD = 50
+MACD_FASTEMA = 12
+MACD_SLOWEMA = 26
+MACD_SIGNAL = 9
+STOP_LOSS_PCT = 0.005
+POSITION_SIZE = 0.20
+LEVERAGE = 25
+PAIR = "SOL/USDT:USDT"
+TIMEFRAME = "1m"
+
+# === Chargement des identifiants ===
+with open("./BIPBIPV7DOS/secret.json") as f:
+    secret = json.load(f)
+
+bitget = PerpBitget(
+    apiKey=secret["bitget_exemple"]["apiKey"],
+    secret=secret["bitget_exemple"]["secret"],
+    password=secret["bitget_exemple"]["password"]
+)
+
+print(f"\n--- Start {datetime.now():%d/%m/%Y %H:%M:%S} | {PAIR} ×{LEVERAGE} ---")
+
+# === Données de marché ===
+df = bitget.get_more_last_historical_async(PAIR, TIMEFRAME, 1000)
+df = df[["open", "high", "low", "close", "volume"]]
+
+if len(df) < max(EMA_SLOW, RSI_PERIOD, MACD_SLOWEMA) + 1:
+    print("⛔ Pas assez de données pour les indicateurs")
+    exit()
+
+# === Indicateurs ===
+df["EMA_FAST"] = ta.trend.ema_indicator(df["close"], EMA_FAST)
+df["EMA_SLOW"] = ta.trend.ema_indicator(df["close"], EMA_SLOW)
+df["RSI"] = ta.momentum.rsi(df["close"], window=RSI_PERIOD)
+macd = ta.trend.MACD(df["close"], window_fast=MACD_FASTEMA, window_slow=MACD_SLOWEMA, window_sign=MACD_SIGNAL)
+df["MACD"] = macd.macd()
+df["MACD_SIGNAL"] = macd.macd_signal()
+df = get_n_columns(df, ["EMA_FAST", "EMA_SLOW", "RSI", "MACD", "MACD_SIGNAL"], 1)
+
+row = df.iloc[-2]
+latest_price = df.iloc[-1]["close"]
+
+# === État du compte ===
+usd_balance = float(bitget.get_usdt_equity())
+print(f"USDT balance: {usd_balance:.2f}")
+
+active = [p for p in bitget.get_open_position() if p["symbol"] == PAIR]
+positions = [{
+
+    "side": p["side"],
+    "qty": float(p["contracts"]) * float(p["contractSize"])
+} for p in active]
+
+# === Chargement des TP enregistrés ===
+tp_data = {}
+if os.path.isfile("live_tp.json"):
+    with open("live_tp.json") as f:
+        tp_data = json.load(f)
+
+# === Conditions d'entrée ===
+def should_open_long(r):
+    return (
+        r["n1_RSI"] < RSI_LOWER_THRESHOLD and r["RSI"] >= RSI_LOWER_THRESHOLD
+        and r["EMA_FAST"] > r["EMA_SLOW"]
+        and r["MACD"] > r["MACD_SIGNAL"]
+    )
+
+def should_open_short(r):
+    return (
+        r["n1_RSI"] > RSI_UPPER_THRESHOLD and r["RSI"] <= RSI_UPPER_THRESHOLD
+        and r["EMA_FAST"] < r["EMA_SLOW"]
+        and r["MACD"] < r["MACD_SIGNAL"]
+    )
+
+# === Gestion de position existante ===
+if positions:
+    pos = positions[0]
+    side = pos["side"]
+    qty_total = pos["qty"]
+    price = latest_price
+    entry_price = tp_data.get("entry_price", 0)
+    print(f"Position active: {side.upper()} qty={qty_total:.4f}")
+
+    # Stop loss
+    sl_price = entry_price * (1 - STOP_LOSS_PCT) if side == "long" else entry_price * (1 + STOP_LOSS_PCT)
+    if (side == "long" and price <= sl_price) or (side == "short" and price >= sl_price):
+        print("❌ SL atteint → fermeture complète")
+        bitget.place_market_order(PAIR, "sell" if side == "long" else "buy", qty_total, reduce=True)
+        tp_data.clear()
+
+    else:
+        for tp_key in ["tp1_price", "tp2_price"]:
+            hit_key = tp_key.replace("price", "hit")
+            tp_val = tp_data.get(tp_key)
+            if tp_val and not tp_data.get(hit_key, False):
+                if (side == "long" and price >= tp_val) or (side == "short" and price <= tp_val):
+                    partial = qty_total * (0.25 if tp_key == "tp1_price" else 0.5)
+                    print(f"🎯 {tp_key.upper()} atteint → closing {partial:.4f}")
+                    bitget.place_market_order(PAIR, "sell" if side == "long" else "buy", partial, reduce=True)
+                    tp_data[hit_key] = True
+
+    # Save state
+    if tp_data:
+        with open("live_tp.json", "w") as f:
+            json.dump(tp_data, f)
+    else:
+        if os.path.isfile("live_tp.json"):
+            os.remove("live_tp.json")
+
+# === Pas de position : Vérification pour nouvelle entrée ===
+else:
+    print("Pas de position → recherche de signal...")
+    notional = usd_balance * POSITION_SIZE * LEVERAGE
+    if should_open_long(row) or should_open_short(row):
+        side = "long" if should_open_long(row) else "short"
+        qty = float(bitget.convert_amount_to_precision(PAIR, notional / latest_price))
+        act = "buy" if side == "long" else "sell"
+        print(f"🚀 Ouverture {side.upper()} qty={qty:.4f}")
+        bitget.place_market_order(PAIR, act, qty, reduce=False)
+
+        entry = latest_price
+        tp1_price = entry * (1 + 0.0075) if side == "long" else entry * (1 - 0.0075)
+        tp2_price = entry * (1 + 0.0125) if side == "long" else entry * (1 - 0.0125)
+
+        tp_data = {
+            "side": side,
+            "entry_price": entry,
+            "tp1_price": tp1_price,
+            "tp2_price": tp2_price,
+            "tp1_hit": False,
+            "tp2_hit": False
+        }
+        with open("live_tp.json", "w") as f:
+            json.dump({**tp_data, "qty": qty}, f)
+
+# === Fin ===
+print(f"--- End {datetime.now():%d/%m/%Y %H:%M:%S} ---")
+
