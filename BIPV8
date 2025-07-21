@@ -22,7 +22,7 @@ MACD_SIGNAL = 9
 STOP_LOSS_PCT = 0.005
 POSITION_SIZE = 0.20
 LEVERAGE = 25
-PAIR = "SOL/USDT:USDT"
+PAIR = "SOLUSDT"  # Nom du contrat perpétuel sur Bitget
 TIMEFRAME = "1m"
 
 # === Chargement des identifiants ===
@@ -63,7 +63,6 @@ print(f"USDT balance: {usd_balance:.2f}")
 
 active = [p for p in bitget.get_open_position() if p["symbol"] == PAIR]
 positions = [{
-
     "side": p["side"],
     "qty": float(p["contracts"]) * float(p["contractSize"])
 } for p in active]
@@ -104,7 +103,6 @@ if positions:
         print("❌ SL atteint → fermeture complète")
         bitget.place_market_order(PAIR, "sell" if side == "long" else "buy", qty_total, reduce=True)
         tp_data.clear()
-
     else:
         for tp_key in ["tp1_price", "tp2_price"]:
             hit_key = tp_key.replace("price", "hit")
